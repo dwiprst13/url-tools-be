@@ -132,6 +132,3 @@ MIT
 
 
 ---
-
-📌 README ini sudah siap taruh di root project.  
-Mau aku tambahin juga contoh **fetch request** (JavaScript) untuk setiap endpoint biar dev lain gampang nyoba?
