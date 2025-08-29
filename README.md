@@ -23,24 +23,24 @@ Didesain modular dengan struktur `cmd/` sebagai entrypoint dan `internal/` untuk
 
 ## 📂 Struktur Project
 
-url-tools-be/
-├── cmd/
-│ ├── main.go # entrypoint gabungan semua fitur
-│ ├── shortener/
-│ │ └── main.go # entrypoint khusus shortener
-│ ├── expander/
-│ │ └── main.go
-│ ├── analyze/
-│ │ └── main.go
-│ └── qr/
-│ └── main.go
-├── internal/
-│ ├── server/ # bootstrap http.Server + middleware
-│ ├── shortener/ # handler shortener
-│ ├── expander/ # handler expander
-│ ├── analyze/ # handler analyze
-│ └── qr/ # handler qr
-└── go.mod 
+url-tools-be/  
+├── cmd/  
+│ ├── main.go # entrypoint gabungan semua fitur  
+│ ├── shortener/  
+│ │ └── main.go # entrypoint khusus shortener  
+│ ├── expander/  
+│ │ └── main.go  
+│ ├── analyze/  
+│ │ └── main.go  
+│ └── qr/  
+│ └── main.go  
+├── internal/  
+│ ├── server/ # bootstrap http.Server + middleware  
+│ ├── shortener/ # handler shortener  
+│ ├── expander/ # handler expander  
+│ ├── analyze/ # handler analyze  
+│ └── qr/ # handler qr  
+└── go.mod   
 
 ---
 
