@@ -51,16 +51,20 @@ url-tools-be/
 git clone https://github.com/<username>/url-tools-be.git
 cd url-tools-be
 
+```
 2. Jalankan server
 
 Semua fitur sekaligus:
 
+```bash
 go run ./cmd/main.go
+```
 
 
 Hanya shortener:
-
+```bash
 go run ./cmd/shortener/main.go
+```
 
 
 Server default jalan di:
