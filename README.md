@@ -77,7 +77,7 @@ http://localhost:8080
 POST /api/shorten
 Request body:
 
-```bash
+```json
 {
   "url": "https://contoh.com",
   "alias": "opsional"
@@ -85,7 +85,7 @@ Request body:
 ```
 
 Response:
-```bash
+```json
 {
   "short_url": "http://localhost:8080/abc123",
   "code": "abc123"
