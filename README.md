@@ -77,36 +77,42 @@ http://localhost:8080
 POST /api/shorten
 Request body:
 
+```bash
 {
   "url": "https://contoh.com",
   "alias": "opsional"
 }
-
+```
 
 Response:
-
+```bash
 {
   "short_url": "http://localhost:8080/abc123",
   "code": "abc123"
 }
+```
 
 
 GET /{code} → redirect ke URL asli.
 
 📂 Expander
 
+```bash
 POST /api/expander
 (coming soon)
+```
 
 📊 Analyze
-
+```bash
 GET /api/analyze/{code}
 (coming soon)
+```
 
 📷 QR Generator
-
+```bash
 POST /api/qr
 (coming soon)
+```
 
 ⚙️ Environment Variable
 
