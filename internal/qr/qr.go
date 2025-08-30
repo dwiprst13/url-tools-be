@@ -1,56 +1,70 @@
+
 package qr
 
 import (
 	"bytes"
-	"image"
+	// "image"
+	"image/color"
 	"image/png"
-	"os"
+	// "os"
 
+	"github.com/fogleman/gg"
+	"github.com/lucasb-eyer/go-colorful"
 	"github.com/skip2/go-qrcode"
-	"golang.org/x/image/draw"
+	// "golang.org/x/image/draw"
 )
 
-func GenerateQRWithLogo(url string, size int, logoPath string) ([]byte, error) {
+func parseHexColor(s string) color.Color {
+	c, _ := colorful.Hex(s)
+	r, g, b := c.RGB255()
+	return color.RGBA{r, g, b, 255}
+}
+
+func GenerateQRWithStyle(url string, size int, label string, colorStr string) ([]byte, error) {
 	qrCode, err := qrcode.New(url, qrcode.Medium)
 	if err != nil {
 		return nil, err
 	}
 	qrCode.DisableBorder = false
+	fgColor := parseHexColor(colorStr)
+	qrCode.ForegroundColor = fgColor
+
 	qrImg := qrCode.Image(size)
 
-	logoFile, err := os.Open(logoPath)
-	if err != nil {
-		return nil, err
-	}
-	defer logoFile.Close()
-
-	logoImg, _, err := image.Decode(logoFile)
-	if err != nil {
-		return nil, err
+	labelHeight := 0
+	if label != "" {
+		labelHeight = 40 
 	}
 
-	logoBounds := logoImg.Bounds()
-	logoW := logoBounds.Dx()
-	logoH := logoBounds.Dy()
-	aspect := float64(logoW) / float64(logoH)
+	margin := 20
+	qrW := qrImg.Bounds().Dx()
+	qrH := qrImg.Bounds().Dy()
 
-	maxLogoW := size / 3
-	targetW := maxLogoW
-	targetH := int(float64(maxLogoW) / aspect)
+	canvasW := qrW + margin*2
+	canvasH := qrH + margin*2 + labelHeight
 
-	dstLogo := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
-	draw.NearestNeighbor.Scale(dstLogo, dstLogo.Bounds(), logoImg, logoBounds, draw.Over, nil)
+	dc := gg.NewContext(canvasW, canvasH)
 
-	offset := image.Pt((qrImg.Bounds().Dx()-targetW)/2, (qrImg.Bounds().Dy()-targetH)/2)
-	outImg := image.NewRGBA(qrImg.Bounds())
-	draw.Draw(outImg, qrImg.Bounds(), qrImg, image.Point{}, draw.Src)
-	draw.Draw(outImg, dstLogo.Bounds().Add(offset), dstLogo, image.Point{}, draw.Over)
+	dc.SetColor(color.White)
+	dc.Clear()
+
+	dc.SetColor(fgColor)
+	dc.SetLineWidth(8)
+	dc.DrawRectangle(4, 4, float64(canvasW-8), float64(canvasH-8))
+	dc.Stroke()
+
+	dc.DrawImageAnchored(qrImg, canvasW/2, (canvasH/2)-2, 0.5, 0.5)
+
+	if label != "" {
+		if err := dc.LoadFontFace("D:/Projek/Go Gank/url-tools-be/assets/arial.ttf", 36); err == nil {
+			r, g, b, _ := fgColor.RGBA()
+			dc.SetRGB(float64(r)/65535, float64(g)/65535, float64(b)/65535)
+			dc.DrawStringAnchored(label, float64(canvasW/2), float64(canvasH-40), 0.5, 0.5)
+		}
+	}
 
 	var buf bytes.Buffer
-	encoder := png.Encoder{CompressionLevel: png.BestCompression}
-	if err := encoder.Encode(&buf, outImg); err != nil {
-		return nil, err
-	}
+	png.Encode(&buf, dc.Image())
 
 	return buf.Bytes(), nil
 }
