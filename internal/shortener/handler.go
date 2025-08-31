@@ -37,13 +37,6 @@ func Init() {
 	}
 }
 
-// func Routes() func(mux *http.ServeMux) {
-// 	return func(mux *http.ServeMux) {
-// 		mux.HandleFunc("/api/shorten", rateLimit(jsonOnly(shortenHandler)))
-// 		mux.HandleFunc("/", redirectHandler)
-// 	}
-// }
-
 func shortenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "methode not alowwed")
