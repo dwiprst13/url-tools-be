@@ -1,3 +1,5 @@
+// Unused
+
 package server
 
 import (
