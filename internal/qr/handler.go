@@ -1,38 +1,40 @@
 package qr
 
 import (
-    "net/http"
-    "strconv"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
-func QRHandler(w http.ResponseWriter, r *http.Request) {
-    url := r.URL.Query().Get("url")
-    sizeStr := r.URL.Query().Get("size")
-    colorStr := r.URL.Query().Get("color")
-    label := r.URL.Query().Get("label")
+func QRHandler(c *gin.Context) {
+	url := c.Query("url")
+	sizeStr := c.Query("size")
+	colorStr := c.Query("color")
+	label := c.Query("label")
 
-    if url == "" {
-        http.Error(w, "url parameter is required", http.StatusBadRequest)
-        return
-    }
+	if url == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "url parameter is required"})
+		return
+	}
 
-    size := 256
-    if sizeStr != "" {
-        if s, err := strconv.Atoi(sizeStr); err == nil {
-            size = s
-        }
-    }
+	size := 256
+	if sizeStr != "" {
+		if s, err := strconv.Atoi(sizeStr); err == nil {
+			size = s
+		}
+	}
 
-    if colorStr == "" {
-        colorStr = "#000000" 
-    }
+	if colorStr == "" {
+		colorStr = "#000000"
+	}
 
-    img, err := GenerateQRWithStyle(url, size, label, colorStr)
-    if err != nil {
-        http.Error(w, "failed to generate QR: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
+	img, err := GenerateQRWithStyle(url, size, label, colorStr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate QR: " + err.Error()})
+		return
+	}
 
-    w.Header().Set("Content-Type", "image/png")
-    w.Write(img)
+	c.Data(http.StatusOK, "image/png", img)
 }
+

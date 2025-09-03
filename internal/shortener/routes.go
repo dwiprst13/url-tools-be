@@ -1,14 +1,14 @@
-// internal/shortener/routes.go
 package shortener
 
 import (
-	"net/http"
-	"url-tools-be/internal/server"
+	"github.com/gin-gonic/gin"
 )
 
-func Routes() server.Option {
-	return func(mux *http.ServeMux) {
-		mux.HandleFunc("/api/shorten", rateLimit(jsonOnly(shortenHandler)))
-		mux.HandleFunc("/", redirectHandler)
-	}
+func RegisterRoutes(router *gin.Engine) {
+	api := router.Group("/api")
+	api.Use(RateLimitMiddleware()) 
+
+	api.POST("/shorten", ShortenHandler)
+	router.GET("/:code", RedirectHandler)
 }
+

@@ -1,16 +1,17 @@
 package shortener
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type shortenReq struct {
-	URL   string `json:"url`
+	URL   string `json:"url"`
 	Alias string `json:"alias,omitempty"`
 }
 
@@ -37,21 +38,16 @@ func Init() {
 	}
 }
 
-func shortenHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpError(w, http.StatusMethodNotAllowed, "methode not alowwed")
-		return
-	}
-
+func ShortenHandler(c *gin.Context) {
 	var req shortenReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, "invalid json")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
 		return
 	}
 
 	longURL, err := NormalizeURL(strings.TrimSpace(req.URL))
 	if err != nil {
-		httpError(w, http.StatusBadRequest, "invalid url")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
 		return
 	}
 
@@ -60,25 +56,25 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 			ShortURL: publicDomain + "/" + existCode,
 			Code:     existCode,
 		}
-		writeJSON(w, http.StatusOK, resp)
+		c.JSON(http.StatusOK, resp)
 		return
 	}
 
 	code := strings.TrimSpace(req.Alias)
 	if code != "" {
 		if !codePattern.MatchString(code) {
-			httpError(w, http.StatusBadRequest, "invalid alias (3-32 alnum/_-)")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid alias (3-32 alnum/_-)})"})
 			return
 		}
 		if err := store.Save(code, longURL); err != nil {
-			httpError(w, http.StatusBadRequest, "alias already in use")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "alias already in use"})
 			return
 		}
 	} else {
 		for {
 			gen, err := GenerateCode(codeLength)
 			if err != nil {
-				httpError(w, http.StatusBadRequest, "generator error")
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "generator error"})
 				return
 			}
 			if err := store.Save(gen, longURL); err == nil {
@@ -91,69 +87,49 @@ func shortenHandler(w http.ResponseWriter, r *http.Request) {
 		ShortURL: publicDomain + "/" + code,
 		Code:     code,
 	}
-	writeJSON(w, http.StatusCreated, resp)
+	c.JSON(http.StatusCreated, resp)
 }
 
-func redirectHandler(w http.ResponseWriter, r *http.Request){
-	if r.Method != http.MethodGet {
-		httpError(w, http.StatusMethodNotAllowed, "methode not allowed")
+func RedirectHandler(c *gin.Context) {
+	code := c.Param("code") 
+
+	if code == "" || code == "favicon.ico" || strings.HasPrefix(code, "api/") {
+		c.String(http.StatusOK, "URL Shortener OK")
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, "/")
-	if path == "" || path == "favicon.ico" || strings.HasPrefix(path, "api/"){
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("url shortener ok"))
-		return
-	}
-	code := path
+
 	longURL, err := store.Get(code)
 	if err != nil {
-		http.NotFound(w, r)
+		c.Status(http.StatusNotFound)
 		return
 	}
 
-	http.Redirect(w, r, longURL, http.StatusMovedPermanently)
+	c.Redirect(http.StatusMovedPermanently, longURL)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func httpError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-func rateLimit(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow(r) {
-			httpError(w, http.StatusTooManyRequests, "rate limit exceeded")
+func RateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !limiter.Allow(c.Request) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			c.Abort()
 			return
 		}
-		next.ServeHTTP(w, r)
+		c.Next() 
 	}
 }
 
-func jsonOnly(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-			httpError(w, http.StatusUnsupportedMediaType, "content-type must be application/json")
+func CORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
 			return
 		}
-		next.ServeHTTP(w, r)
+		c.Next()
 	}
 }
 
-func withCORS(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
-}

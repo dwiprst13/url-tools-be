@@ -1,12 +1,10 @@
 package qr
 
 import (
-	"net/http"
-	"url-tools-be/internal/server"
+	"github.com/gin-gonic/gin"
 )
 
-func Routes() server.Option {
-	return func(mux *http.ServeMux) {
-		mux.HandleFunc("/qr", QRHandler)
-	}
+func RegisterRoutes(router *gin.Engine) {
+	router.GET("/qr", QRHandler)
 }
+
