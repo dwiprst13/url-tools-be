@@ -1,114 +1,106 @@
 package auth
 
 import (
-	"net/http"
-	"time"
+    "database/sql"
+    "net/http"
+    "time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+    "github.com/gin-gonic/gin"
+    "github.com/golang-jwt/jwt/v5"
+    "golang.org/x/crypto/bcrypt"
 )
 
-// Cuman buat test
-var jwtSecret = []byte("secret-key-bruh") 
+var jwtSecret = []byte("secret-key-bruh")
+
+type AuthService struct {
+    DB *sql.DB
+}
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+    Email    string `json:"email"`
+    Password string `json:"password"`
 }
 
-type Claims struct {
-	Username string `json:"username"`
-	jwt.RegisteredClaims
+type RegisterRequest struct {
+    Email    string `json:"email"`
+    Password string `json:"password"`
+    Role     string `json:"role"` 
 }
 
-// Sampai sini
-func validateUser (username, password string) bool {
-	return username == "admin" && password == "password"
+func (a *AuthService) validateUser(email, password string) (int, string, bool) {
+    var id int
+    var hashedPassword string
+    var role string
+
+    err := a.DB.QueryRow(`SELECT id, password_hash, role FROM users WHERE email=$1`, email).
+        Scan(&id, &hashedPassword, &role)
+    if err != nil {
+        return 0, "", false
+    }
+
+    if bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) != nil {
+        return 0, "", false
+    }
+
+    return id, role, true
 }
 
-func generateToken(username string) (string, error) {
-	claims := &Claims{
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "url-tools-be",
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+func generateToken(id int, email, role string) (string, error) {
+    claims := &Claims{
+        UserID: id,
+        Email:  email,
+        Role:   role,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            Issuer:    "url-tools-be",
+        },
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(jwtSecret)
 }
 
-func LoginHandler(c *gin.Context) {
-	var req LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
+func (a *AuthService) RegisterHandler(c *gin.Context) {
+    var req RegisterRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+        return
+    }
 
-	if !validateUser (req.Username, req.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+        return
+    }
 
-	token, err := generateToken(req.Username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
-		return
-	}
+    _, err = a.DB.Exec(`INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)`,
+        req.Email, string(hashedPassword), req.Role)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
+        return
+    }
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+    c.JSON(http.StatusOK, gin.H{"message": "user registered successfully"})
 }
 
-func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
-			c.Abort()
-			return
-		}
+func (a *AuthService) LoginHandler(c *gin.Context) {
+    var req LoginRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+        return
+    }
 
-		var tokenString string
-		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-			tokenString = authHeader[7:]
-		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format"})
-			c.Abort()
-			return
-		}
+    id, role, ok := a.validateUser(req.Email, req.Password)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+        return
+    }
 
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
-		})
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
-			c.Abort()
-			return
-		}
+    token, err := generateToken(id, req.Email, role)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+        return
+    }
 
-		claims, ok := token.Claims.(*Claims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
-			c.Abort()
-			return
-		}
-
-		c.Set("username", claims.Username)
-
-		c.Next()
-	}
-}
-
-func ProfileHandler(c *gin.Context) {
-	username, exists := c.Get("username")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "username not found in context"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"username": username,
-		"message":  "This is a protected profile endpoint",
-	})
+    c.JSON(http.StatusOK, gin.H{"token": token})
 }

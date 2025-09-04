@@ -1,0 +1,16 @@
+
+bin/
+*.exe
+*.out
+*.dll
+
+*.test
+*.log
+
+.env
+.env.*
+!.env.example   # kecuali contoh env, tetap ikut commit
+
+.vscode/
+.idea/
+.DS_Store
