@@ -9,7 +9,7 @@ bin/
 
 .env
 .env.*
-!.env.example   # kecuali contoh env, tetap ikut commit
+!.env.example   
 
 .vscode/
 .idea/
